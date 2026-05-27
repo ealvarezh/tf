@@ -34,9 +34,13 @@ EJECUCIÓN:
 import os
 import sys
 import json
+import time
 import argparse
 import urllib.request
 from pathlib import Path
+
+# Deshabilita el backend experimental hf_transfer (causa WinError 10054 en Windows)
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
 
 import torch
 import numpy as np
@@ -245,6 +249,27 @@ def print_ranking(results: list, label: str = "score"):
 # ETAPA 1: RECUPERACIÓN CROSS-MODAL
 # ─────────────────────────────────────────────────────────────
 
+def _hf_prefetch(repo_id: str, max_retries: int = 5) -> None:
+    """Pre-descarga un repo de HuggingFace con reintentos.
+
+    Cada intento crea un cliente HTTP nuevo, evitando el bug de httpx donde
+    un WinError 10054 deja el cliente en estado cerrado y los reintentos
+    internos de huggingface_hub fallan con 'client has been closed'.
+    """
+    from huggingface_hub import snapshot_download
+    for attempt in range(max_retries):
+        try:
+            snapshot_download(repo_id=repo_id, ignore_patterns=["*.msgpack", "*.h5", "flax_model*"])
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt  # 1s, 2s, 4s, 8s…
+                print(f"    Red inestable, reintento {attempt + 1}/{max_retries} en {wait}s… ({type(e).__name__})")
+                time.sleep(wait)
+            else:
+                print(f"    Advertencia: pre-descarga falló tras {max_retries} intentos, continuando…")
+
+
 def load_encoders(device: str):
     """
     Carga BioCLIP, CLIP y SigLIP.
@@ -254,6 +279,7 @@ def load_encoders(device: str):
     import open_clip
 
     print("\n  Cargando BioCLIP (ViT-B/16, especializado en biología)...")
+    _hf_prefetch("imageomics/bioclip")
     bioclip_model, _, bioclip_preprocess = open_clip.create_model_and_transforms(
         "hf-hub:imageomics/bioclip"
     )
