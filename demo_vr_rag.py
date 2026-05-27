@@ -59,7 +59,7 @@ SPECIES_DB = [
             "Antennae longer than the body. Length 25–35 mm. "
             "Found in lowland Amazon rainforest under 1000m elevation."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Stenaspis_superba.jpg/640px-Stenaspis_superba.jpg",
+        "image_url": "http://bezbycids.com/byciddb/images/S/Stenaspis_superba_(h-f)_Aurivillius_NHRS_Mojos_La_Paz_Bolivia_Johannes%20Bergsten.jpg",
         "subrepresented": True,
     },
     {
@@ -72,7 +72,7 @@ SPECIES_DB = [
             "Ventral side cryptic brown with eyespots. Wingspan 120–150 mm. "
             "Males highly iridescent, females less so. Common in Amazon basin."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Morpho_helenor_thersites_male_up.jpg/640px-Morpho_helenor_thersites_male_up.jpg",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Morphohelenorachilleana.JPG/1280px-Morphohelenorachilleana.JPG",
         "subrepresented": False,
     },
     {
@@ -85,7 +85,7 @@ SPECIES_DB = [
             "and cephalic horns. Elytra olive-green to yellowish with black spots. "
             "Body length up to 85 mm excluding horn. Nocturnal. Found in cloud forest."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Dynastes_hercules_ecuatorianus_MHNT.jpg/640px-Dynastes_hercules_ecuatorianus_MHNT.jpg",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Dynastes_hercules_ecuatorianus_MHNT.jpg/1920px-Dynastes_hercules_ecuatorianus_MHNT.jpg",
         "subrepresented": False,
     },
     {
@@ -98,7 +98,7 @@ SPECIES_DB = [
             "Powerful mandibles. Body length 150–170 mm. Nocturnal, attracted to lights. "
             "Extremely rare, very few specimens known. Deep Amazon rainforest."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/Titanus_giganteus.jpg/640px-Titanus_giganteus.jpg",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Titanus_giganteus_MHNT_dos.jpg/960px-Titanus_giganteus_MHNT_dos.jpg",
         "subrepresented": True,
     },
     {
@@ -111,7 +111,7 @@ SPECIES_DB = [
             "Males have extremely elongated forelegs. Body 40–75 mm. "
             "Associated with fig trees. Found throughout tropical Americas."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Acrocinus_longimanus_-_harlequin_beetle.jpg/640px-Acrocinus_longimanus_-_harlequin_beetle.jpg",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Acrocinus_longimanus_MHNT_femelle.jpg/960px-Acrocinus_longimanus_MHNT_femelle.jpg",
         "subrepresented": True,
     },
     {
@@ -124,7 +124,7 @@ SPECIES_DB = [
             "Müllerian mimic of H. erato. Wingspan 60–75 mm. "
             "Slow deliberate flight. Pollen-feeding behavior. Widespread Amazon."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Heliconius_melpomene_melpomene_MHNT_dos.jpg/640px-Heliconius_melpomene_melpomene_MHNT_dos.jpg",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Heliconius_melpomene_penelope_MHNT_dos_Male.jpg/1280px-Heliconius_melpomene_penelope_MHNT_dos_Male.jpg",
         "subrepresented": False,
     },
     {
@@ -137,7 +137,7 @@ SPECIES_DB = [
             "Dorsal surface blue-brown dark. Wingspan 95–120 mm. "
             "Crepuscular. Feeds on rotting fruit. Mimics owl eye to deter predators."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Caligo_eurilochus_MHNT.jpg/640px-Caligo_eurilochus_MHNT.jpg",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Caligo_eurilochus_Richard_Bartz.jpg/960px-Caligo_eurilochus_Richard_Bartz.jpg",
         "subrepresented": False,
     },
     {
@@ -150,7 +150,7 @@ SPECIES_DB = [
             "Smaller than M. helenor. Wingspan 100–115 mm. "
             "Fast erratic flight. Common in Amazon lowland forest."
         ),
-        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Morpho_achilles_achilles_MHNT.jpg/640px-Morpho_achilles_achilles_MHNT.jpg",
+        "image_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Morachil.jpg/1920px-Morachil.jpg",
         "subrepresented": False,
     },
 ]
@@ -161,17 +161,17 @@ SPECIES_DB = [
 # ─────────────────────────────────────────────────────────────
 QUERY_IMAGES = {
     "stenaspis": {
-        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Stenaspis_superba.jpg/640px-Stenaspis_superba.jpg",
+        "url": "http://bezbycids.com/byciddb/images/S/Stenaspis_superba_(h-f)_Aurivillius_NHRS_Mojos_La_Paz_Bolivia_Johannes%20Bergsten.jpg",
         "target": "stenaspis_superba",
         "description": "Escarabajo negro con manchas rojas — posible Cerambycidae",
     },
     "morpho": {
-        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Morpho_helenor_thersites_male_up.jpg/640px-Morpho_helenor_thersites_male_up.jpg",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Morphohelenorachilleana.JPG/1280px-Morphohelenorachilleana.JPG",
         "target": "morpho_helenor",
         "description": "Mariposa azul iridiscente grande",
     },
     "acrocinus": {
-        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Acrocinus_longimanus_-_harlequin_beetle.jpg/640px-Acrocinus_longimanus_-_harlequin_beetle.jpg",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Acrocinus_longimanus_MHNT_femelle.jpg/960px-Acrocinus_longimanus_MHNT_femelle.jpg",
         "target": "acrocinus_longimanus",
         "description": "Longicornio con patrón geométrico rojo y negro",
     },
@@ -182,14 +182,37 @@ QUERY_IMAGES = {
 # UTILIDADES
 # ─────────────────────────────────────────────────────────────
 
+def _direct_wikimedia_url(url: str) -> str:
+    """Convert a Wikimedia thumbnail URL to the direct full-resolution URL.
+    thumb format: .../commons/thumb/X/XX/file.jpg/NNNpx-file.jpg
+    direct format: .../commons/X/XX/file.jpg
+    """
+    if "/thumb/" in url:
+        base, rest = url.split("/thumb/", 1)
+        # drop the last segment (NNNpx-file.jpg), keep the path to the file
+        file_path = "/".join(rest.split("/")[:-1])
+        return f"{base}/{file_path}"
+    return url
+
+
+_MAX_SIDE = 512  # BioCLIP/CLIP/DINOv2 usan 224px internamente; 512 es más que suficiente
+
+
 def download_image(url: str, path: Path) -> Image.Image:
-    """Descarga una imagen desde URL y la guarda en disco."""
+    """Descarga una imagen, la redimensiona a _MAX_SIDE px (lado mayor) y la guarda."""
     if not path.exists():
-        print(f"  Descargando {url.split('/')[-1]}...")
+        direct = _direct_wikimedia_url(url)
+        print(f"  Descargando {direct.split('/')[-1]}...")
         headers = {"User-Agent": "Mozilla/5.0 (research demo)"}
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as r:
-            path.write_bytes(r.read())
+        req = urllib.request.Request(direct, headers=headers)
+        import io
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        if max(img.size) > _MAX_SIDE:
+            img.thumbnail((_MAX_SIDE, _MAX_SIDE), Image.LANCZOS)
+        img.save(path, "JPEG", quality=90)
+        print(f"    → guardada como {img.size[0]}×{img.size[1]} px")
     return Image.open(path).convert("RGB")
 
 

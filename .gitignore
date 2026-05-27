@@ -1,0 +1,5 @@
+# Imágenes del demo
+images_demo/
+
+# Claude Code settings locales
+.claude/settings.local.json
