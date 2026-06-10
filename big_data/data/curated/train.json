@@ -1,0 +1,108 @@
+{
+  "images": [
+    {
+      "id": 1,
+      "file_name": "Felis_catus_0.jpg"
+    },
+    {
+      "id": 2,
+      "file_name": "Felis_catus_1.jpg"
+    },
+    {
+      "id": 3,
+      "file_name": "Canis_lupus_familiaris_0.jpg"
+    },
+    {
+      "id": 4,
+      "file_name": "Canis_lupus_familiaris_1.jpg"
+    },
+    {
+      "id": 5,
+      "file_name": "Equus_caballus_0.jpg"
+    },
+    {
+      "id": 6,
+      "file_name": "Equus_caballus_1.jpg"
+    },
+    {
+      "id": 7,
+      "file_name": "Bos_taurus_0.jpg"
+    },
+    {
+      "id": 8,
+      "file_name": "Bos_taurus_1.jpg"
+    },
+    {
+      "id": 9,
+      "file_name": "Columba_livia_0.jpg"
+    },
+    {
+      "id": 10,
+      "file_name": "Columba_livia_1.jpg"
+    }
+  ],
+  "annotations": [
+    {
+      "image_id": 1,
+      "category_id": 1
+    },
+    {
+      "image_id": 2,
+      "category_id": 1
+    },
+    {
+      "image_id": 3,
+      "category_id": 2
+    },
+    {
+      "image_id": 4,
+      "category_id": 2
+    },
+    {
+      "image_id": 5,
+      "category_id": 3
+    },
+    {
+      "image_id": 6,
+      "category_id": 3
+    },
+    {
+      "image_id": 7,
+      "category_id": 4
+    },
+    {
+      "image_id": 8,
+      "category_id": 4
+    },
+    {
+      "image_id": 9,
+      "category_id": 5
+    },
+    {
+      "image_id": 10,
+      "category_id": 5
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "common_name": "Felis catus"
+    },
+    {
+      "id": 2,
+      "common_name": "Canis lupus familiaris"
+    },
+    {
+      "id": 3,
+      "common_name": "Equus caballus"
+    },
+    {
+      "id": 4,
+      "common_name": "Bos taurus"
+    },
+    {
+      "id": 5,
+      "common_name": "Columba livia"
+    }
+  ]
+}
