@@ -257,6 +257,10 @@ def _hf_prefetch(repo_id: str, max_retries: int = 5) -> None:
     internos de huggingface_hub fallan con 'client has been closed'.
     """
     from huggingface_hub import snapshot_download
+    # Asegura que el modo offline no bloquee esta descarga
+    os.environ.pop("HF_HUB_OFFLINE", None)
+    os.environ.pop("TRANSFORMERS_OFFLINE", None)
+
     for attempt in range(max_retries):
         try:
             snapshot_download(repo_id=repo_id, ignore_patterns=["*.msgpack", "*.h5", "flax_model*"])
@@ -270,6 +274,24 @@ def _hf_prefetch(repo_id: str, max_retries: int = 5) -> None:
                 print(f"    Advertencia: pre-descarga falló tras {max_retries} intentos, continuando…")
 
 
+def _hf_prefetch_all() -> None:
+    """Pre-descarga todos los modelos y luego activa modo offline.
+
+    Así los from_pretrained posteriores no hacen ningún HEAD request
+    (que en Windows con ciertas redes falla con WinError 10054).
+    """
+    repos = [
+        "imageomics/bioclip",
+        "facebook/dinov2-small",
+    ]
+    for repo in repos:
+        print(f"  Verificando caché: {repo}…")
+        _hf_prefetch(repo)
+    # Con todos los modelos en caché, desactivamos la red para el resto del script
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+
 def load_encoders(device: str):
     """
     Carga BioCLIP, CLIP y SigLIP.
@@ -279,7 +301,6 @@ def load_encoders(device: str):
     import open_clip
 
     print("\n  Cargando BioCLIP (ViT-B/16, especializado en biología)...")
-    _hf_prefetch("imageomics/bioclip")
     bioclip_model, _, bioclip_preprocess = open_clip.create_model_and_transforms(
         "hf-hub:imageomics/bioclip"
     )
@@ -689,6 +710,11 @@ def main():
     print(f"  VR-RAG + BioCLIP — Demo")
     print(f"  Dispositivo: {device}")
     print(f"{'='*60}")
+
+    # Pre-descargar todos los modelos HF y activar modo offline
+    # Esto evita que los HEAD requests de huggingface_hub fallen con WinError 10054
+    print_section("Verificando modelos en caché…")
+    _hf_prefetch_all()
 
     # Crear carpeta para imágenes
     img_dir = Path("./images_demo")
