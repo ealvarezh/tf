@@ -1,5 +1,4 @@
 # VR-RAG + BioCLIP — Contexto del proyecto
-# Para Claude Code: lee esto primero antes de ayudar con el código.
 
 ## Qué es este proyecto
 

@@ -1,5 +1,11 @@
-# Imágenes del demo
+# Imagenes y knowledge bases
 images_demo/
+kb_araneae/
+kb_insecta/
+
+# Python
+__pycache__/
+*.py[cod]
 
 # Claude Code settings locales
 .claude/settings.local.json
