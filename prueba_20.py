@@ -5,8 +5,10 @@ Corre el pipeline VR-RAG sobre una lista de especies candidatas y genera
 un resumen comparativo de resultados.
 
 Uso:
-    python batch_test_insecta.py
-    python batch_test_insecta.py --top-m 30 --top-k 10
+    python prueba_20.py                          # correr pipeline completo
+    python prueba_20.py --top-m 30 --top-k 10
+    python prueba_20.py --summary-only           # leer batch_results.json sin re-correr
+    python prueba_20.py --rebuild-cache          # forzar recomputo de embeddings
 """
 
 import argparse
@@ -22,17 +24,18 @@ os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
 import torch
 from PIL import Image
 
-# Reutiliza las funciones del script de test
 sys.path.insert(0, str(Path(__file__).parent))
 from test_vr_rag_insecta import (
     load_species_db, load_encoders, load_dino,
-    stage1, stage2,
+    stage1, stage2, stage3,
     _encode_img, _encode_texts, _encode_dino,
     mrr_at_k,
 )
 
 KB_DIR        = Path(__file__).parent / "kb_insecta"
 RESULTS_JSON  = KB_DIR / "batch_results.json"
+TEXT_EMB_CACHE = KB_DIR / "text_emb_cache.pt"   # embeddings de descripciones
+DINO_EMB_CACHE = KB_DIR / "dino_emb_cache.pt"   # embeddings DINOv2 de imagenes ancla
 _MAX_SIDE     = 512
 
 # ── Lista de candidatos ────────────────────────────────────────────────────────
@@ -122,10 +125,9 @@ CANDIDATES = [
         "img_url":  "https://inaturalist-open-data.s3.amazonaws.com/photos/632882281/original.jpg",
     },
 ]
-# URLs con manifiestos JSON (nrm.se) se omiten — no son imágenes directas
 
 
-def fetch_image(url: str) -> Image.Image | None:
+def fetch_image(url: str) -> "Image.Image | None":
     try:
         headers = {"User-Agent": "Mozilla/5.0 (tesis-vr-rag)"}
         req = urllib.request.Request(url, headers=headers)
@@ -141,7 +143,6 @@ def fetch_image(url: str) -> Image.Image | None:
 
 
 def taxonomic_hit(result_species: dict, target: dict) -> str:
-    """Clasifica el resultado por nivel taxonomico."""
     if result_species["name"].strip().lower() == target["species"].strip().lower():
         return "especie"
     if result_species.get("family", "").lower() == target["family"].lower():
@@ -151,50 +152,207 @@ def taxonomic_hit(result_species: dict, target: dict) -> str:
     return "miss"
 
 
-def run_batch(species_db, encoders, dino_model, dino_proc, device, top_m, top_k):
+# ── Cache de embeddings ────────────────────────────────────────────────────────
+
+def build_text_emb_cache(species_db: list, encoders: dict, device: str) -> dict:
+    """
+    Precalcula embeddings de texto (BioCLIP + CLIP) para todas las especies.
+    Retorna dict: {"bioclip": Tensor[N,D], "clip": Tensor[N,D], "n_species": int}
+    """
+    print("\nPrecalculando embeddings de texto (cache)...")
+    descriptions = [e["description"] for e in species_db]
+    text_embs = {}
+    for name, (model, _, tokenizer) in encoders.items():
+        text_embs[name] = _encode_texts(model, tokenizer, descriptions, device).cpu()
+        print(f"  {name}: {text_embs[name].shape}")
+    text_embs["n_species"] = len(species_db)
+    torch.save(text_embs, TEXT_EMB_CACHE)
+    print(f"  Guardado en: {TEXT_EMB_CACHE}")
+    return text_embs
+
+
+def build_dino_emb_cache(species_db: list, dino_model, dino_proc, device: str) -> dict:
+    """
+    Precalcula embeddings DINOv2 de todas las imagenes ancla por especie.
+    Retorna dict: {species_name: Tensor[n_anchors, D]}
+    """
+    print("\nPrecalculando embeddings DINOv2 de imagenes ancla (cache)...")
+    dino_embs = {}
+    total = len(species_db)
+    for i, sp in enumerate(species_db, 1):
+        anchors = []
+        for img_path in sp.get("image_anchors", [sp["image_url"]]):
+            try:
+                img = Image.open(img_path).convert("RGB")
+                e = _encode_dino(dino_model, dino_proc, img, device).cpu()
+                anchors.append(e)
+            except Exception:
+                pass
+        if anchors:
+            dino_embs[sp["name"]] = torch.cat(anchors, dim=0)
+        if i % 200 == 0 or i == total:
+            print(f"  [{i}/{total}] procesadas")
+    torch.save(dino_embs, DINO_EMB_CACHE)
+    print(f"  Guardado en: {DINO_EMB_CACHE}")
+    return dino_embs
+
+
+def load_or_build_caches(species_db, encoders, dino_model, dino_proc,
+                         device, rebuild=False):
+    text_embs = None
+    dino_embs = None
+
+    # Texto
+    if TEXT_EMB_CACHE.exists() and not rebuild:
+        saved = torch.load(TEXT_EMB_CACHE, map_location="cpu")
+        if saved.get("n_species") == len(species_db):
+            text_embs = saved
+            print(f"Cache de texto cargado ({saved['n_species']} especies)")
+        else:
+            print("Cache de texto desactualizado, recalculando...")
+    if text_embs is None:
+        text_embs = build_text_emb_cache(species_db, encoders, device)
+
+    # DINOv2
+    if DINO_EMB_CACHE.exists() and not rebuild:
+        saved = torch.load(DINO_EMB_CACHE, map_location="cpu")
+        if len(saved) == len(species_db):
+            dino_embs = saved
+            print(f"Cache DINOv2 cargado ({len(dino_embs)} especies)")
+        else:
+            print("Cache DINOv2 desactualizado, recalculando...")
+    if dino_embs is None:
+        dino_embs = build_dino_emb_cache(species_db, dino_model, dino_proc, device)
+
+    return text_embs, dino_embs
+
+
+# ── Stage 1 con cache ──────────────────────────────────────────────────────────
+
+def stage1_cached(query_img, species_db, encoders, text_embs, device, top_m):
+    """Stage 1 usando embeddings de texto precalculados (sin re-tokenizar)."""
+    print(f"\n{'─'*60}")
+    print("  ETAPA 1 — Recuperacion cross-modal (BioCLIP + CLIP) [cache]")
+    print(f"{'─'*60}")
+
+    all_scores = {}
+    for name, (model, preprocess, _) in encoders.items():
+        q_emb = _encode_img(model, preprocess, query_img, device)
+        t_embs = text_embs[name].to(device)
+        scores = (q_emb @ t_embs.T).squeeze(0)
+        all_scores[name] = scores.cpu()
+
+    ensemble = torch.stack(list(all_scores.values())).mean(dim=0)
+    top_idx  = ensemble.argsort(descending=True)[:top_m]
+
+    results = []
+    for rank, idx in enumerate(top_idx):
+        results.append({
+            "rank":           rank + 1,
+            "species":        species_db[idx],
+            "score_bioclip":  all_scores["bioclip"][idx].item(),
+            "score_clip":     all_scores["clip"][idx].item(),
+            "score_ensemble": ensemble[idx].item(),
+        })
+
+    print(f"\n  Top-{top_m}:")
+    for r in results:
+        subrep = " [SUBREP]" if r["species"]["subrepresented"] else ""
+        print(f"  {r['rank']}. {r['species']['name']:<40} "
+              f"ensemble={r['score_ensemble']:.4f}{subrep}")
+    return results
+
+
+# ── Stage 2 con cache ──────────────────────────────────────────────────────────
+
+def stage2_cached(query_img, candidates, dino_model, dino_proc,
+                  dino_embs, device, lam, top_k):
+    """Stage 2 usando embeddings DINOv2 precalculados para los anclas."""
+    print(f"\n{'─'*60}")
+    print(f"  ETAPA 2 — Re-ranking visual DINOv2  (lambda={lam}) [cache]")
+    print(f"{'─'*60}")
+
+    q_dino = _encode_dino(dino_model, dino_proc, query_img, device)
+
+    reranked = []
+    for cand in candidates:
+        sp = cand["species"]
+        sp_name = sp["name"]
+        s_dino = 0.0
+        if sp_name in dino_embs:
+            anchors = dino_embs[sp_name].to(device)
+            sims = (q_dino @ anchors.T).squeeze(0)
+            s_dino = sims.max().item() if sims.numel() > 0 else 0.0
+        s_final = lam * cand["score_ensemble"] + (1 - lam) * s_dino
+        reranked.append({**cand, "score_dino": s_dino, "score_final": s_final})
+
+    reranked.sort(key=lambda x: x["score_final"], reverse=True)
+    for i, r in enumerate(reranked):
+        r["rank_final"] = i + 1
+
+    print(f"\n  {'Especie':<40} {'s_cross':>8} {'s_dino':>8} {'s_final':>8}  Cambio")
+    print("  " + "-" * 72)
+    for r in reranked:
+        delta = r["rank"] - r["rank_final"]
+        ch = f"+{delta}" if delta > 0 else (str(delta) if delta < 0 else "=")
+        top = " <- TOP1" if r["rank_final"] == 1 else ""
+        print(f"  {r['species']['name']:<40} "
+              f"{r['score_ensemble']:>8.4f} {r['score_dino']:>8.4f} "
+              f"{r['score_final']:>8.4f}  {ch:>5}{top}")
+    return reranked[:top_k]
+
+
+# ── Batch ──────────────────────────────────────────────────────────────────────
+
+def run_batch(species_db, encoders, dino_model, dino_proc,
+              text_embs, dino_embs, device, top_m, top_k):
     results = []
 
     for i, cand in enumerate(CANDIDATES, 1):
-        print(f"\n[{i}/{len(CANDIDATES)}] {cand['species']} ({cand['family']})")
+        print(f"\n{'='*60}")
+        print(f"[{i}/{len(CANDIDATES)}] {cand['species']} ({cand['family']})")
         print(f"  URL: {cand['img_url'][:70]}...")
 
         img = fetch_image(cand["img_url"])
         if img is None:
-            results.append({**cand, "status": "error", "top1": None, "hit_level": "error"})
+            results.append({**cand, "status": "error", "top1": None,
+                            "hit_level": "error", "lmm_response": "ERROR: imagen no descargada"})
             continue
 
-        # Etapa 1
-        stage1_results = stage1(img, species_db, encoders, device, top_m)
-        # Etapa 2
-        top_k_results  = stage2(img, stage1_results, dino_model, dino_proc,
-                                device, lam=0.7, top_k=top_k)
+        stage1_results = stage1_cached(img, species_db, encoders, text_embs, device, top_m)
+        top_k_results  = stage2_cached(img, stage1_results, dino_model, dino_proc,
+                                       dino_embs, device, lam=0.7, top_k=top_k)
+        lmm_result     = stage3(top_k_results, image_url=cand["img_url"])
 
-        top1    = top_k_results[0]["species"]
-        hit     = taxonomic_hit(top1, cand)
-        mrr1    = mrr_at_k(top_k_results, cand["species"], k=1)
-        mrr10   = mrr_at_k(top_k_results, cand["species"], k=10)
-        mrr_e1  = mrr_at_k(stage1_results, cand["species"], k=top_m)
+        top1 = top_k_results[0]["species"]
+        hit  = taxonomic_hit(top1, cand)
+        mrr1   = mrr_at_k(top_k_results, cand["species"], k=1)
+        mrr10  = mrr_at_k(top_k_results, cand["species"], k=10)
+        mrr_e1 = mrr_at_k(stage1_results, cand["species"], k=top_m)
 
-        print(f"  -> Top-1: {top1['name']} ({top1.get('family','')}) | hit: {hit.upper()}")
+        print(f"\n  -> Top-1: {top1['name']} ({top1.get('family','')}) | hit: {hit.upper()}")
+        print(f"  -> LMM predicho: {lmm_result['predicted']}")
 
         results.append({
-            "target_species": cand["species"],
-            "target_family":  cand["family"],
-            "target_order":   cand["order"],
-            "predicted_top1": top1["name"],
+            "target_species":   cand["species"],
+            "target_family":    cand["family"],
+            "target_order":     cand["order"],
+            "predicted_top1":   top1["name"],
             "predicted_family": top1.get("family", ""),
-            "hit_level":      hit,
-            "mrr_at_1":       mrr1,
-            "mrr_at_10":      mrr10,
-            "mrr_e1":         mrr_e1,
-            "score_final":    top_k_results[0]["score_final"],
+            "lmm_predicted":    lmm_result["predicted"],
+            "lmm_response":     lmm_result["lmm_response"],
+            "hit_level":        hit,
+            "mrr_at_1":         mrr1,
+            "mrr_at_10":        mrr10,
+            "mrr_e1":           mrr_e1,
+            "score_final":      top_k_results[0]["score_final"],
             "top5": [
                 {
-                    "rank": r["rank_final"],
-                    "name": r["species"]["name"],
+                    "rank":   r["rank_final"],
+                    "name":   r["species"]["name"],
                     "family": r["species"].get("family", ""),
-                    "score": round(r["score_final"], 4),
-                    "hit": taxonomic_hit(r["species"], cand),
+                    "score":  round(r["score_final"], 4),
+                    "hit":    taxonomic_hit(r["species"], cand),
                 }
                 for r in top_k_results[:5]
             ],
@@ -208,7 +366,6 @@ def print_summary(results: list):
     print("  RESUMEN BATCH")
     print(f"{'='*70}")
 
-    # Normalizar claves — entradas de error usan 'species' en lugar de 'target_species'
     for r in results:
         if "target_species" not in r:
             r["target_species"]  = r.get("species", "ERROR")
@@ -222,15 +379,24 @@ def print_summary(results: list):
     hits    = {"especie": 0, "familia": 0, "orden": 0, "miss": 0, "error": 0}
     mrr_sum = 0.0
 
-    print(f"\n  {'Especie objetivo':<35} {'Top-1 predicho':<35} {'Hit':<8} MRR@10")
-    print("  " + "-" * 90)
+    has_lmm = any("lmm_response" in r for r in results)
+    header  = f"  {'Especie objetivo':<35} {'Top-1 predicho':<35} {'Hit':<8} MRR@10"
+    if has_lmm:
+        header += "  LMM"
+    print(header)
+    print("  " + "-" * (90 + (30 if has_lmm else 0)))
+
     for r in results:
         hits[r["hit_level"]] += 1
         mrr_sum += r.get("mrr_at_10", 0)
-        print(f"  {r['target_species']:<35} "
-              f"{r.get('predicted_top1', 'ERROR'):<35} "
-              f"{r['hit_level'].upper():<8} "
-              f"{r.get('mrr_at_10', 0):.4f}")
+        line = (f"  {r['target_species']:<35} "
+                f"{r.get('predicted_top1', 'ERROR'):<35} "
+                f"{r['hit_level'].upper():<8} "
+                f"{r.get('mrr_at_10', 0):.4f}")
+        if has_lmm:
+            lmm_text = r.get("lmm_response", "")[:60].replace("\n", " ")
+            line += f"  {lmm_text}"
+        print(line)
 
     print(f"\n  Resultados por nivel taxonomico:")
     print(f"    Especie exacta  : {hits['especie']}")
@@ -249,16 +415,17 @@ def print_summary(results: list):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--top-m",        type=int, default=30)
-    parser.add_argument("--top-k",        type=int, default=10)
-    parser.add_argument("--summary-only", action="store_true",
+    parser.add_argument("--top-m",         type=int, default=30)
+    parser.add_argument("--top-k",         type=int, default=10)
+    parser.add_argument("--summary-only",  action="store_true",
                         help="Leer batch_results.json y mostrar resumen sin re-correr")
+    parser.add_argument("--rebuild-cache", action="store_true",
+                        help="Forzar recomputo de embeddings aunque exista cache")
     args = parser.parse_args()
 
-    # Modo solo resumen — lee el JSON ya guardado
     if args.summary_only:
         if not RESULTS_JSON.exists():
-            print(f"ERROR: {RESULTS_JSON} no encontrado. Corre sin --summary-only primero.")
+            print(f"ERROR: {RESULTS_JSON} no encontrado.")
             return
         with open(RESULTS_JSON, encoding="utf-8") as f:
             results = json.load(f)
@@ -275,8 +442,13 @@ def main():
     encoders   = load_encoders(device)
     dino_model, dino_proc = load_dino(device)
 
+    text_embs, dino_embs = load_or_build_caches(
+        species_db, encoders, dino_model, dino_proc,
+        device, rebuild=args.rebuild_cache,
+    )
+
     results = run_batch(species_db, encoders, dino_model, dino_proc,
-                        device, args.top_m, args.top_k)
+                        text_embs, dino_embs, device, args.top_m, args.top_k)
 
     KB_DIR.mkdir(exist_ok=True)
     with open(RESULTS_JSON, "w", encoding="utf-8") as f:
