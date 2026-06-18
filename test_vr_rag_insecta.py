@@ -22,6 +22,12 @@ os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
 
 import torch
 from PIL import Image
+from openai import OpenAI
+
+# ── LMM config (DeepSeek via NVIDIA) ──────────────────────────────────────────
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "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")
+LMM_MODEL      = "deepseek-ai/deepseek-v4-flash"
+# ──────────────────────────────────────────────────────────────────────────────
 
 KB_DIR          = Path(__file__).parent / "kb_insecta"
 KB_JSON         = KB_DIR / "knowledge_base.json"
@@ -192,31 +198,95 @@ def stage2(query_img: Image.Image, candidates: list, dino_model, dino_proc,
 
 # ── Etapa 3 ────────────────────────────────────────────────────────────────────
 
-def stage3(top_k: list) -> str:
+def stage3(top_k: list, image_url: str = "") -> dict:
     print(f"\n{'─'*60}")
-    print("  ETAPA 3 — Resultado final")
+    print("  ETAPA 3 — Razonamiento LMM (DeepSeek)")
     print(f"{'─'*60}")
 
-    best  = top_k[0]["species"]
-    score = top_k[0]["score_final"]
-    conf  = "high" if score > 0.85 else "medium" if score > 0.70 else "low"
+    # Construir contexto con los top-k candidatos y sus scores
+    candidates_text = ""
+    for i, r in enumerate(top_k, 1):
+        sp = r["species"]
+        subrep = f" [SUBREPRESENTADA: {sp['dataset_records']} registros]" if sp["subrepresented"] else ""
+        candidates_text += (
+            f"\nCandidato {i} (score visual={r['score_final']:.4f}):\n"
+            f"  Especie: {sp['name']}{subrep}\n"
+            f"  Familia: {sp['family']} | Orden: {sp['order']}\n"
+            f"  Descripcion: {sp['description']}\n"
+        )
 
-    subrep_note = (
-        f"\n  NOTA: especie subrepresentada ({best['dataset_records']} registros en el dataset)."
-        if best["subrepresented"] else ""
+    img_ref = f"\nURL de la imagen de consulta: {image_url}" if image_url else ""
+
+    prompt = (
+        "Eres un entomólogo experto en insectos amazónicos y andinos de Perú y países vecinos.\n"
+        f"{img_ref}\n"
+        "Se te proporciona una lista de especies candidatas ordenadas por similitud visual "
+        "(score más alto = más similar a la imagen):\n"
+        f"{candidates_text}\n"
+        "Basándote en los scores de similitud visual, las descripciones taxonómicas "
+        "y tu conocimiento de entomología neotropical, responde:\n"
+        "1. ¿Cuál es la especie más probable? Justifica con rasgos morfológicos clave.\n"
+        "2. ¿Qué tan confiable es la identificación (alta/media/baja)? ¿Por qué?\n"
+        "3. Si la especie está marcada como subrepresentada, ¿qué implicaciones tiene "
+        "para la biodiversidad amazónica?\n"
+        "Responde en español, de forma concisa."
     )
 
-    print(f"\n  Especie identificada : {best['name']}")
-    print(f"  Familia / Orden      : {best['family']} / {best['order']}")
-    print(f"  Score final          : {score:.4f}")
-    print(f"  Confianza            : {conf}{subrep_note}")
+    print(f"\n  Llamando a {LMM_MODEL}...")
+    try:
+        client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=NVIDIA_API_KEY,
+        )
+        completion = client.chat.completions.create(
+            model=LMM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=1,
+            top_p=0.95,
+            max_tokens=1024,
+            extra_body={
+                "chat_template_kwargs": {
+                    "thinking": True,
+                    "reasoning_effort": "high",
+                }
+            },
+            stream=False,
+        )
+        reasoning = (
+            getattr(completion.choices[0].message, "reasoning", None) or
+            getattr(completion.choices[0].message, "reasoning_content", None)
+        )
+        response  = completion.choices[0].message.content
 
-    print(f"\n  Top-{len(top_k)} completo:")
-    for r in top_k:
-        subrep = " [SUBREP]" if r["species"]["subrepresented"] else ""
-        print(f"  {r['rank_final']}. {r['species']['name']:<40} {r['score_final']:.4f}{subrep}")
+        if reasoning:
+            print(f"\n  [Razonamiento interno]")
+            for line in reasoning.strip().split("\n")[:8]:
+                print(f"  {line}")
+            print("  ...")
 
-    return best["name"]
+        print(f"\n  [Respuesta LMM]")
+        for line in response.strip().split("\n"):
+            print(f"  {line}")
+
+        # Especie predicha por el LMM: tomar la del top-1 por score
+        # (el LMM puede confirmar o rechazar, pero la métrica se basa en ranking)
+        predicted = top_k[0]["species"]["name"]
+
+        return {
+            "predicted":  predicted,
+            "lmm_response": response,
+            "reasoning":  reasoning or "",
+        }
+
+    except Exception as e:
+        print(f"\n  ERROR en LMM: {e}")
+        print("  Usando top-1 por score como fallback.")
+        best = top_k[0]["species"]
+        return {
+            "predicted":    best["name"],
+            "lmm_response": f"ERROR: {e}",
+            "reasoning":    "",
+        }
 
 
 # ── Metricas ───────────────────────────────────────────────────────────────────
@@ -236,8 +306,8 @@ def main():
     group.add_argument("--image-url", help="URL de imagen de prueba")
     group.add_argument("--image",     help="Ruta local de imagen de prueba")
     parser.add_argument("--target-species", default=None)
-    parser.add_argument("--top-m", type=int, default=5)
-    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--top-m", type=int, default=30)   # Etapa 1 → top-30 (paper)
+    parser.add_argument("--top-k", type=int, default=10)   # Etapa 2 → top-10 (paper)
     parser.add_argument("--lam",   type=float, default=0.7)
     args = parser.parse_args()
 
@@ -258,24 +328,25 @@ def main():
     encoders   = load_encoders(device)
     dino_model, dino_proc = load_dino(device)
 
-    candidates = stage1(query_img, species_db, encoders, device, args.top_m)
-    top_k      = stage2(query_img, candidates, dino_model, dino_proc,
-                        device, args.lam, args.top_k)
-    prediction = stage3(top_k)
+    candidates  = stage1(query_img, species_db, encoders, device, args.top_m)
+    top_k       = stage2(query_img, candidates, dino_model, dino_proc,
+                         device, args.lam, args.top_k)
+    lmm_result  = stage3(top_k, image_url=args.image_url or args.image or "")
+    prediction  = lmm_result["predicted"]
 
     if args.target_species:
         print(f"\n{'─'*60}")
         print("  METRICAS")
         print(f"{'─'*60}")
-        mrr1   = mrr_at_k(top_k, args.target_species, k=1)
-        mrr5   = mrr_at_k(top_k, args.target_species, k=5)
-        mrr_e1 = mrr_at_k(candidates, args.target_species, k=args.top_m)
-        ok     = "CORRECTO" if mrr1 == 1.0 else "incorrecto"
-        print(f"  Objetivo  : {args.target_species}")
-        print(f"  Top-1     : {prediction}  ({ok})")
-        print(f"  MRR@1     : {mrr1:.4f}")
-        print(f"  MRR@5     : {mrr5:.4f}")
-        print(f"  MRR@{args.top_m} E1 : {mrr_e1:.4f}")
+        mrr1    = mrr_at_k(top_k, args.target_species, k=1)
+        mrr10   = mrr_at_k(top_k, args.target_species, k=10)
+        mrr_e1  = mrr_at_k(candidates, args.target_species, k=args.top_m)
+        ok      = "CORRECTO" if mrr1 == 1.0 else "incorrecto"
+        print(f"  Objetivo      : {args.target_species}")
+        print(f"  Top-1         : {prediction}  ({ok})")
+        print(f"  MRR@1         : {mrr1:.4f}")
+        print(f"  MRR@10        : {mrr10:.4f}")
+        print(f"  MRR@{args.top_m} (E1) : {mrr_e1:.4f}")
         if mrr1 > mrr_e1:
             print("  -> Re-ranking mejoro la posicion del resultado correcto")
 
