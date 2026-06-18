@@ -208,6 +208,16 @@ def print_summary(results: list):
     print("  RESUMEN BATCH")
     print(f"{'='*70}")
 
+    # Normalizar claves — entradas de error usan 'species' en lugar de 'target_species'
+    for r in results:
+        if "target_species" not in r:
+            r["target_species"]  = r.get("species", "ERROR")
+            r["target_family"]   = r.get("family", "")
+            r["target_order"]    = r.get("order", "")
+            r["predicted_top1"]  = r.get("top1") or "ERROR"
+            r.setdefault("mrr_at_10", 0)
+            r.setdefault("hit_level", "error")
+
     total   = len([r for r in results if r["hit_level"] != "error"])
     hits    = {"especie": 0, "familia": 0, "orden": 0, "miss": 0, "error": 0}
     mrr_sum = 0.0
@@ -217,14 +227,13 @@ def print_summary(results: list):
     for r in results:
         hits[r["hit_level"]] += 1
         mrr_sum += r.get("mrr_at_10", 0)
-        hit_str = r["hit_level"].upper()
         print(f"  {r['target_species']:<35} "
               f"{r.get('predicted_top1', 'ERROR'):<35} "
-              f"{hit_str:<8} "
+              f"{r['hit_level'].upper():<8} "
               f"{r.get('mrr_at_10', 0):.4f}")
 
     print(f"\n  Resultados por nivel taxonomico:")
-    print(f"    Especie exacta : {hits['especie']}")
+    print(f"    Especie exacta  : {hits['especie']}")
     print(f"    Familia correcta: {hits['familia']}")
     print(f"    Orden correcto  : {hits['orden']}")
     print(f"    Miss            : {hits['miss']}")
@@ -240,9 +249,21 @@ def print_summary(results: list):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--top-m", type=int, default=30)
-    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--top-m",        type=int, default=30)
+    parser.add_argument("--top-k",        type=int, default=10)
+    parser.add_argument("--summary-only", action="store_true",
+                        help="Leer batch_results.json y mostrar resumen sin re-correr")
     args = parser.parse_args()
+
+    # Modo solo resumen — lee el JSON ya guardado
+    if args.summary_only:
+        if not RESULTS_JSON.exists():
+            print(f"ERROR: {RESULTS_JSON} no encontrado. Corre sin --summary-only primero.")
+            return
+        with open(RESULTS_JSON, encoding="utf-8") as f:
+            results = json.load(f)
+        print_summary(results)
+        return
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"\n{'='*70}")
