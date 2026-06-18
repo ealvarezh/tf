@@ -3,6 +3,11 @@ images_demo/
 kb_araneae/
 kb_insecta/
 
+# Excepciones: compartir cache de embeddings y resultados
+!kb_insecta/text_emb_cache.pt
+!kb_insecta/dino_emb_cache.pt
+!kb_insecta/batch_results.json
+
 # Python
 __pycache__/
 *.py[cod]
