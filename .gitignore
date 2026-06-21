@@ -2,6 +2,8 @@
 images_demo/
 kb_araneae/
 kb_insecta/
+big_data_project/data/
+
 
 # Excepciones: compartir cache de embeddings y resultados
 !kb_insecta/text_emb_cache.pt
