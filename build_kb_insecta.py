@@ -11,6 +11,10 @@ Uso:
     python build_kb_insecta.py --max-images 3           # menos imagenes por especie
     python build_kb_insecta.py --suggest-test 20        # muestra 20 candidatos para imagen de prueba
     python build_kb_insecta.py --force-rebuild          # ignora cache y reescribe todo
+    
+    # Este debe ser por defecto el primer comando a correr para generar la KB y las imagenes locales.
+    python build_kb_insecta.py --force-rebuild --all-orders
+
 
 Outputs en kb_insecta/:
     knowledge_base.json       metadatos + rutas locales por especie
@@ -30,7 +34,7 @@ import requests
 from tqdm import tqdm
 
 # ── Configuracion ──────────────────────────────────────────────────────────────
-PARQUET_DIR = Path(r"c:\Users\jc.ruedah\Downloads\0063675-260519110011954\parquet")
+PARQUET_DIR = Path(r"C:\Users\jc.ruedah\Downloads\0072981-260519110011954\parquet")
 KB_DIR      = Path(__file__).parent / "kb_insecta"
 KB_JSON     = KB_DIR / "knowledge_base.json"
 TEST_JSON   = KB_DIR / "test_candidates.json"
