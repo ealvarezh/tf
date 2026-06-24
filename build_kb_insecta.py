@@ -30,7 +30,7 @@ import requests
 from tqdm import tqdm
 
 # ── Configuracion ──────────────────────────────────────────────────────────────
-PARQUET_DIR = Path(r"c:\Users\jc.ruedah\Downloads\0063675-260519110011954\parquet")
+PARQUET_DIR = Path(r"C:\Users\jc.ruedah\Downloads\0072981-260519110011954\parquet")
 KB_DIR      = Path(__file__).parent / "kb_insecta"
 KB_JSON     = KB_DIR / "knowledge_base.json"
 TEST_JSON   = KB_DIR / "test_candidates.json"

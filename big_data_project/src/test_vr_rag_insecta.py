@@ -298,6 +298,15 @@ def mrr_at_k(results: list, target: str, k: int) -> float:
     return 0.0
 
 
+def taxon_accuracy_at_k(results: list, target_taxon: str, level: str, k: int) -> float:
+    """Fraccion de los top-k candidatos que comparten order/family con target_taxon."""
+    matches = sum(
+        1 for r in results[:k]
+        if r["species"].get(level, "").strip().lower() == target_taxon.strip().lower()
+    )
+    return matches / min(k, len(results))
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
@@ -347,6 +356,19 @@ def main():
         print(f"  MRR@1         : {mrr1:.4f}")
         print(f"  MRR@10        : {mrr10:.4f}")
         print(f"  MRR@{args.top_m} (E1) : {mrr_e1:.4f}")
+
+        target_entry = next(
+            (e for e in species_db if e["name"].strip().lower() == args.target_species.strip().lower()),
+            None,
+        )
+        if target_entry:
+            order_acc  = taxon_accuracy_at_k(top_k, target_entry["order"],  "order",  k=args.top_k)
+            family_acc = taxon_accuracy_at_k(top_k, target_entry["family"], "family", k=args.top_k)
+            print(f"  Order-acc@{args.top_k}  : {order_acc:.2%}  ({target_entry['order']})")
+            print(f"  Family-acc@{args.top_k} : {family_acc:.2%}  ({target_entry['family']})")
+        else:
+            print(f"  AVISO: '{args.target_species}' no esta en species_db, no se puede calcular order/family-acc")
+
         if mrr1 > mrr_e1:
             print("  -> Re-ranking mejoro la posicion del resultado correcto")
 
