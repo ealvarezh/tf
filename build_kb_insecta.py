@@ -11,6 +11,10 @@ Uso:
     python build_kb_insecta.py --max-images 3           # menos imagenes por especie
     python build_kb_insecta.py --suggest-test 20        # muestra 20 candidatos para imagen de prueba
     python build_kb_insecta.py --force-rebuild          # ignora cache y reescribe todo
+    
+    # Este debe ser por defecto el primer comando a correr para generar la KB y las imagenes locales.
+    python build_kb_insecta.py --force-rebuild --all-orders
+
 
 Outputs en kb_insecta/:
     knowledge_base.json       metadatos + rutas locales por especie
